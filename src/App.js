@@ -7,78 +7,117 @@ import { APP_ID } from "./secret";
 
 const App = () => {
 
-  const [recipes, setRecipes] = useState([]);
-  const [largeList, setLargeSelect] = useState(['選択してください']);
-  const [mediumList, setMediumSelect] = useState(['選択してください']);
+  const [recipes, setRecipes] = useState([]); // レシピデータ
+  const [largeList, setLargeSelect] = useState([]); // 大分類
+  const [mediumList, setMediumSelect] = useState([]); // 小分類
+  const [largeItemValue, setLargeValue] = useState(); // 大分類のvalue値
 
+  // 初回描画：人気ランキングとセレクトボックスのセット
   useEffect(() => {
     getRecipes();
-    getMediumCategory();
     getLargeCategory();
   }, []);
 
   // 人気上位のレシピ取得 
-  const getRecipes = async () => {
-    const response = await fetch(`https://app.rakuten.co.jp/services/api/Recipe/CategoryRanking/20170426?applicationId=${APP_ID}&categoryId=10-66-50`)
+  const getRecipes = async (url = null) => {
+    if (url === null) {
+      url = `https://app.rakuten.co.jp/services/api/Recipe/CategoryRanking/20170426?applicationId=${APP_ID}`;
+    }
+    const response = await fetch(url);
     const data = await response.json();
     setRecipes(data.result);
   }
   // 大分類カテゴリ取得
   const getLargeCategory = async () => {
-    const response = await fetch(`https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426?format=json&categoryType=large&applicationId=${APP_ID}`)
-    const data = await response.json();
-    console.log('large');
-    console.log(data.result.large);
-    setLargeSelect(data.result.large);
+    const largeResponse = await fetch(`https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426?format=json&categoryType=large&applicationId=${APP_ID}`)
+    const largeData = await largeResponse.json();
+    if (largeData.result !== null && largeData.result !== undefined) {
+
+      setLargeSelect(largeData.result.large);
+    }
   }
   // 小分類カテゴリ取得
-  const getMediumCategory = async (largeId) => {
-    const response = await fetch(`https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426?format=json&categoryType=medium&applicationId=${APP_ID}`)
-    const data = await response.json();
-    console.log('medium');
-    console.log(data.result.medium);
-    // 選択されたlargeIdを使ってフィルタリングしたい
-    setMediumSelect(data.result.medium);
+  const getMediumCategory = async (largeValue = null) => {
+    const url = `https://app.rakuten.co.jp/services/api/Recipe/CategoryList/20170426?format=json&categoryType=medium&applicationId=${APP_ID}`;
+    const mediumResponse = await fetch(url);
+    const mediumData = await mediumResponse.json();
+    if (mediumData.result !== null && mediumData.result !== undefined) {
+      // 大分類が選択された場合、絞り込みをする
+      if (largeValue !== null) {
+        const mediumItems = mediumData.result.medium.filter(data => data.parentCategoryId === largeValue);
+        setMediumSelect(mediumItems);
+      } else {
+        setMediumSelect(mediumData.result.medium);
+      }
+    }
+  }
+
+  // セレクトボックスを変えたときのアクション
+  const narrowDownSelectItem = async () => {
+    const largeIndex = document.getElementById('largeCategory').selectedIndex;
+    const largeValue = document.getElementById('largeCategory').options[largeIndex].value;
+    const mediumIndex = document.getElementById('mediumCategory').selectedIndex;
+    const mediumValue = document.getElementById('mediumCategory').options[mediumIndex].value;
+
+    // ステート管理している値と取得した値が違う場合、ステートにセット＋mediumのセレクトを再取得
+    if (largeItemValue !== largeValue) {
+      setLargeValue(largeValue);
+      await getMediumCategory(largeValue);
+    } else {
+      await getMediumCategory(largeValue);
+
+      if (largeValue !== '0' && mediumValue !== '0') {
+        const categoryId = largeValue + "-" + mediumValue;
+        const url = `https://app.rakuten.co.jp/services/api/Recipe/CategoryRanking/20170426?applicationId=${APP_ID}&categoryId=${categoryId}`;
+        getRecipes(url);
+      }
+    }
   }
 
   return (
     <div className="App">
-      <div className="largeCategorySelect">
-        <div className="cp_ipselect cp_sl04">
-          <select name="largeCategory" onChange={getLargeCategory}>
-            {
-              largeList
-                ? largeList?.map((item, index) => (
+      <form name="SelectForm">
+        <div className="largeCategorySelect">
+          <div className="cp_ipselect cp_sl04">
+            <select id="largeCategory" onChange={narrowDownSelectItem}>
+              <option value="0">選択してください</option>
+              {
+                largeList
+                  ? largeList?.map((item, index) => (
 
-                  <SelectList
-                    key={(index + 1) + 1000}
-                    categoryId={item.categoryId}
-                    categoryName={item.categoryName}
-                  />
-                ))
-                : null
-            }
-          </select>
+                    <SelectList
+                      key={index}
+                      parentId={item.categoryId}
+                      categoryId={item.categoryId}
+                      categoryName={item.categoryName}
+                    />
+                  ))
+                  : null
+              }
+            </select>
+          </div>
         </div>
-      </div>
 
-      <div className="mediumCategorySelect">
-        <div className="cp_ipselect cp_sl04">
-          <select name="mediumCategory" onChange={getMediumCategory}>
-            {
-              mediumList
-                ? mediumList?.map((item, index) => (
-                  <SelectList
-                    key={item.categoryId + (index + 1) * 200}
-                    categoryId={item.categoryId}
-                    categoryName={item.categoryName}
-                  />
-                ))
-                : null
-            }
-          </select>
+        <div className="mediumCategorySelect">
+          <div className="cp_ipselect cp_sl04">
+            <select id="mediumCategory" onChange={narrowDownSelectItem}>
+              <option value="0">選択してください</option>
+              {
+                mediumList
+                  ? mediumList?.map((item, index) => (
+                    <SelectList
+                      key={index}
+                      parentId={item.parentCategoryId}
+                      categoryId={item.categoryId}
+                      categoryName={item.categoryName}
+                    />
+                  ))
+                  : null
+              }
+            </select>
+          </div>
         </div>
-      </div>
+      </form>
 
       <div className="recipes">
         <ul id="recipe_list">

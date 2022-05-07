@@ -1,8 +1,8 @@
 import React from "react";
 
-const SelectList = ({ categoryId, categoryName }) => {
+const SelectList = ({ parentCategoryId, categoryId, categoryName }) => {
 	return (
-		<option value={categoryId}>{categoryName}</option>
+		<option name={parentCategoryId} value={categoryId}>{categoryName}</option>
 	);
 }
 
